@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-shell";
 
 interface DashboardData {
   paired: boolean;
@@ -32,8 +33,14 @@ export default function Dashboard() {
     }
   }
 
-  function openWebsite() {
-    window.open("https://ordoo.shop", "_blank");
+  async function openWebsite() {
+    try {
+      await open("https://ordoo.shop");
+    } catch (e) {
+      console.error("Failed to open website:", e);
+      // Fallback
+      window.open("https://ordoo.shop", "_blank");
+    }
   }
 
   if (!data) return <div style={{ textAlign: "center", padding: 40, color: "#7a8d9e" }}>جاري التحميل...</div>;

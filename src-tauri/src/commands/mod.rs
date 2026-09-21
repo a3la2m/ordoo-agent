@@ -115,6 +115,15 @@ pub async fn start_pairing(
         config.store_name = Some("متجر".to_string());
         config.agent_token = response.token.clone();
         let _ = app.security_store.save_config(&config);
+
+        // Auto-connect WebSocket after pairing
+        if let Some(tok) = &response.token {
+            if let Some(sid) = response.store_id {
+                let tok_c = tok.clone();
+                drop(config);
+                let _ = app.ws_manager.lock().await.connect(&tok_c, sid).await;
+            }
+        }
     }
 
     {
@@ -290,4 +299,91 @@ pub async fn discover_printers(
     subnet: String,
 ) -> Result<Vec<crate::printer::manager::DiscoveredPrinter>, String> {
     Ok(PrinterManager::discover_network_printers(&subnet).await)
+}
+
+// --- Server API commands ---
+
+#[tauri::command]
+pub async fn get_server_printers(
+    state: State<'_, Arc<Mutex<crate::AppState>>>,
+) -> Result<Vec<crate::api::ServerPrinterInfo>, String> {
+    let app = state.lock().await;
+    let config = app.config.lock().await;
+    let token = config.agent_token.as_deref().ok_or("Not paired")?;
+    app.api_client.fetch_printers(token).await
+}
+
+#[tauri::command]
+pub async fn test_server_printer(
+    state: State<'_, Arc<Mutex<crate::AppState>>>,
+    printer_id: i64,
+) -> Result<crate::api::PrinterTestResult, String> {
+    let app = state.lock().await;
+    let config = app.config.lock().await;
+    let token = config.agent_token.as_deref().ok_or("Not paired")?;
+    app.api_client.test_printer(token, printer_id).await
+}
+
+#[tauri::command]
+pub async fn unpair_with_server(
+    state: State<'_, Arc<Mutex<crate::AppState>>>,
+) -> Result<String, String> {
+    let app = state.lock().await;
+    let config = app.config.lock().await;
+
+    if let Some(token) = &config.agent_token {
+        let token_clone = token.clone();
+        drop(config);
+        let result = app.api_client.unpair_from_server(&token_clone).await;
+
+        // Even if server call fails, do local unpair
+        app.security_store.clear_token().ok();
+        app.ws_manager.lock().await.disconnect().await;
+
+        let mut config = app.config.lock().await;
+        config.paired = false;
+        config.agent_id = None;
+        config.store_id = None;
+        config.store_name = None;
+        config.agent_token = None;
+        let _ = app.security_store.save_config(&config);
+
+        let db = app.db.lock().await;
+        let _ = AgentLogger::info(&db, "pairing", "Agent unpaired by user");
+
+        match result {
+            Ok(()) => Ok("تم فك الربط بنجاح".to_string()),
+            Err(e) => Ok(format!("تم فك الربط محلياً (تعذر الاتصال بالسيرفر: {})", e)),
+        }
+    } else {
+        // Already unpaired locally
+        let mut config = app.config.lock().await;
+        config.paired = false;
+        config.agent_id = None;
+        config.store_id = None;
+        config.store_name = None;
+        config.agent_token = None;
+        let _ = app.security_store.save_config(&config);
+        Ok("تم فك الربط".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn check_connection(
+    state: State<'_, Arc<Mutex<crate::AppState>>>,
+) -> Result<serde_json::Value, String> {
+    let app = state.lock().await;
+    let config = app.config.lock().await;
+    let token = config.agent_token.as_deref().ok_or("الجهاز غير مربوط")?;
+
+    match app.api_client.check_connection(token).await {
+        Ok(true) => Ok(serde_json::json!({
+            "success": true,
+            "message": "الاتصال بالسيرفر يعمل بشكل طبيعي ✓"
+        })),
+        Ok(false) | Err(_) => Ok(serde_json::json!({
+            "success": false,
+            "message": "تعذر الاتصال بالسيرفر"
+        })),
+    }
 }

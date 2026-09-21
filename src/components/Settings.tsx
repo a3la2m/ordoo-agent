@@ -14,36 +14,50 @@ interface Config {
 export default function Settings() {
   const [config, setConfig] = useState<Config | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [msgType, setMsgType] = useState<"success" | "error" | "info">("info");
   const [showReconnect, setShowReconnect] = useState(false);
   const [reconnectToken, setReconnectToken] = useState("");
   const [reconnectLoading, setReconnectLoading] = useState(false);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
+  const [checkingConnection, setCheckingConnection] = useState(false);
 
-  useEffect(() => {
-    loadConfig();
-  }, []);
+  useEffect(() => { loadConfig(); }, []);
 
   async function loadConfig() {
     try {
       const cfg = await invoke<Config>("get_config");
       setConfig(cfg);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   }
 
-  async function handleUnpair() {
-    if (!confirm("هل أنت متأكد من فك الربط؟ سيتعطل البرنامج عن العمل حتى تربط جهازًا جديدًا.")) return;
-    try {
-      const result = await invoke<string>("unpair");
-      setMsg(result);
-      await loadConfig();
-    } catch (e: any) {
-      setMsg(e.toString());
-    }
+  function showMsg(text: string, type: "success" | "error" | "info" = "info") {
+    setMsg(text);
+    setMsgType(type);
+    setTimeout(() => setMsg(null), 5000);
   }
 
+  // If paired → just check connection
   async function handleReconnect() {
+    if (!config?.paired) {
+      // Not paired → show token modal
+      setShowReconnect(true);
+      return;
+    }
+
+    // Paired → check connection
+    setCheckingConnection(true);
+    try {
+      const result = await invoke<{ success: boolean; message: string }>("check_connection");
+      showMsg(result.message, result.success ? "success" : "error");
+    } catch (e: any) {
+      showMsg("فشل الاتصال بالسيرفر: " + e.toString(), "error");
+    } finally {
+      setCheckingConnection(false);
+    }
+  }
+
+  // Pair with new token
+  async function handlePairWithToken() {
     if (!reconnectToken.trim()) {
       setReconnectError("يرجى إدخال توكن الربط");
       return;
@@ -51,13 +65,11 @@ export default function Settings() {
     setReconnectLoading(true);
     setReconnectError(null);
     try {
-      const response = await invoke<any>("start_pairing", {
-        token: reconnectToken.trim(),
-      });
+      const response = await invoke<any>("start_pairing", { token: reconnectToken.trim() });
       if (response.success) {
-        setMsg("تم إعادة الربط بنجاح!");
         setShowReconnect(false);
         setReconnectToken("");
+        showMsg("تم الربط بنجاح!", "success");
         await loadConfig();
       } else {
         setReconnectError(response.message || "فشل الربط");
@@ -69,14 +81,36 @@ export default function Settings() {
     }
   }
 
+  async function handleUnpair() {
+    if (!confirm("هل أنت متأكد من فك الربط؟\nسيتم حذف هذا الجهاز من الأجهزة المربوطة.")) return;
+    try {
+      const result = await invoke<string>("unpair_with_server");
+      showMsg(result, "success");
+      await loadConfig();
+    } catch (e: any) {
+      // Even if server call fails, local unpair
+      try {
+        await invoke<string>("unpair");
+        showMsg("تم فك الربط محلياً", "info");
+        await loadConfig();
+      } catch (e2: any) {
+        showMsg(e2.toString(), "error");
+      }
+    }
+  }
+
   if (!config) return <div style={{ textAlign: "center", padding: 40, color: "#7a8d9e" }}>جاري التحميل...</div>;
+
+  const msgColors = { success: "#dcfce7", error: "#fef2f2", info: "#f0f9ff" };
+  const msgTextColors = { success: "#16a34a", error: "#dc2626", info: "#2563eb" };
 
   return (
     <div style={{ maxWidth: 500, margin: "0 auto" }}>
       <h1 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#1a2a38", margin: "0 0 20px" }}>الإعدادات</h1>
 
       {msg && (
-        <div style={{ background: "#f0f9ff", color: "#2563eb", padding: "10px 16px", borderRadius: 10, fontSize: "0.85rem", marginBottom: 16 }}>
+        <div style={{ background: msgColors[msgType], color: msgTextColors[msgType], padding: "10px 16px", borderRadius: 10, fontSize: "0.85rem", marginBottom: 16 }}>
+          <i className={`fas ${msgType === "success" ? "fa-check-circle" : msgType === "error" ? "fa-exclamation-circle" : "fa-info-circle"} ml-2`}></i>
           {msg}
         </div>
       )}
@@ -94,11 +128,19 @@ export default function Settings() {
       </div>
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => setShowReconnect(true)} style={{
-          flex: 1, padding: "10px", background: "#2C3E50", color: "white",
-          borderRadius: 10, border: "none", fontWeight: 700, cursor: "pointer",
+        <button onClick={handleReconnect} disabled={checkingConnection} style={{
+          flex: 1, padding: "10px",
+          background: checkingConnection ? "#a0a8b0" : "#2C3E50",
+          color: "white", borderRadius: 10, border: "none", fontWeight: 700,
+          cursor: checkingConnection ? "not-allowed" : "pointer",
         }}>
-          <i className="fas fa-redo ml-2"></i> إعادة الاتصال
+          {checkingConnection ? (
+            <><i className="fas fa-spinner fa-spin ml-2"></i> جاري الفحص...</>
+          ) : config.paired ? (
+            <><i className="fas fa-plug ml-2"></i> فحص الاتصال</>
+          ) : (
+            <><i className="fas fa-redo ml-2"></i> إعادة الاتصال</>
+          )}
         </button>
         <button onClick={handleUnpair} style={{
           flex: 1, padding: "10px", background: "#fef2f2", color: "#dc2626",
@@ -108,7 +150,7 @@ export default function Settings() {
         </button>
       </div>
 
-      {/* Reconnect Modal */}
+      {/* Reconnect/Pair Modal */}
       {showReconnect && (
         <div style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
@@ -118,24 +160,21 @@ export default function Settings() {
           <div style={{
             background: "white", borderRadius: 16, padding: 24,
             width: "100%", maxWidth: 400,
-          }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 8px", fontSize: "1rem", fontWeight: 800 }}>إعادة الربط</h3>
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 8px", fontSize: "1rem", fontWeight: 800 }}>ربط الجهاز</h3>
             <p style={{ fontSize: "0.8rem", color: "#7a8d9e", margin: "0 0 16px" }}>
-              أدخل التوكن الجديد من صفحة إعداد الطباعة في لوحة التاجر
+              أدخل التوكن من صفحة إعداد الطباعة في لوحة التاجر
             </p>
 
             <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#4a6070", marginBottom: 4 }}>توكن الربط</label>
               <input
-                type="text"
-                value={reconnectToken}
-                onChange={(e) => setReconnectToken(e.target.value.toUpperCase())}
+                type="text" value={reconnectToken}
+                onChange={e => setReconnectToken(e.target.value.toUpperCase())}
                 placeholder="AB12CD34"
                 style={{
                   width: "100%", padding: "10px 14px", border: "2px solid #e5e7eb",
                   borderRadius: 10, fontSize: "1rem", fontFamily: "monospace",
-                  letterSpacing: 2, textAlign: "center", outline: "none",
-                  boxSizing: "border-box",
+                  letterSpacing: 2, textAlign: "center", outline: "none", boxSizing: "border-box",
                 }}
               />
             </div>
@@ -147,7 +186,7 @@ export default function Settings() {
             )}
 
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={handleReconnect} disabled={reconnectLoading} style={{
+              <button onClick={handlePairWithToken} disabled={reconnectLoading} style={{
                 flex: 1, padding: "10px",
                 background: reconnectLoading ? "#a0a8b0" : "#2C3E50",
                 color: "white", borderRadius: 10, border: "none", fontWeight: 700,
@@ -158,9 +197,7 @@ export default function Settings() {
               <button onClick={() => { setShowReconnect(false); setReconnectToken(""); setReconnectError(null); }} style={{
                 padding: "10px 16px", background: "#f3f4f6", color: "#6b7280",
                 borderRadius: 10, border: "none", fontWeight: 600, cursor: "pointer",
-              }}>
-                إلغاء
-              </button>
+              }}>إلغاء</button>
             </div>
           </div>
         </div>

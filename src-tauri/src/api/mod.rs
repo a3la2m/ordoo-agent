@@ -124,4 +124,70 @@ impl ApiClient {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    /// Fetch printers from server
+    pub async fn fetch_printers(&self, token: &str) -> Result<Vec<ServerPrinterInfo>, String> {
+        let resp = self.client
+            .get(&self.agent_url("/printers"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        #[derive(Deserialize)]
+        struct PrintersResponse {
+            success: bool,
+            printers: Vec<ServerPrinterInfo>,
+        }
+
+        let data = resp.json::<PrintersResponse>().await.map_err(|e| e.to_string())?;
+        Ok(data.printers)
+    }
+
+    /// Test printer connection on server
+    pub async fn test_printer(&self, token: &str, printer_id: i64) -> Result<PrinterTestResult, String> {
+        let resp = self.client
+            .post(&self.agent_url(&format!("/printers/{}/test", printer_id)))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let data = resp.json::<PrinterTestResult>().await.map_err(|e| e.to_string())?;
+        Ok(data)
+    }
+
+    /// Unpair from server
+    pub async fn unpair_from_server(&self, token: &str) -> Result<(), String> {
+        let _resp = self.client
+            .post(&self.agent_url("/unpair"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// Check connection (ping)
+    pub async fn check_connection(&self, token: &str) -> Result<bool, String> {
+        self.ping(token).await?;
+        Ok(true)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerPrinterInfo {
+    pub id: i64,
+    pub name: String,
+    pub connection_type: String,
+    pub ip_address: Option<String>,
+    pub section_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrinterTestResult {
+    pub success: bool,
+    pub connected: bool,
+    pub response_time_ms: Option<u64>,
+    pub message: String,
 }

@@ -129,12 +129,26 @@ pub fn run() {
                 ws_manager: Mutex::new(ws_manager),
                 print_queue,
                 printer_manager: Mutex::new(printer_manager),
-                config: Arc::new(Mutex::new(config)),
+                config: Arc::new(Mutex::new(config.clone())),
                 security_store,
                 shutdown_sender: None,
             }));
 
-            app.manage(state);
+            app.manage(state.clone());
+
+            // Auto-connect WebSocket if paired
+            if config.paired {
+                if let Some(token) = &config.agent_token {
+                    if let Some(store_id) = config.store_id {
+                        let state_clone = state.clone();
+                        let tokenClone = token.clone();
+                        tokio::spawn(async move {
+                            let app = state_clone.lock().await;
+                            let _ = app.ws_manager.lock().await.connect(&tokenClone, store_id).await;
+                        });
+                    }
+                }
+            }
 
             // Setup system tray
             let _tray = TrayIconBuilder::new()
@@ -163,6 +177,10 @@ pub fn run() {
             commands::test_printer,
             commands::get_printers,
             commands::discover_printers,
+            commands::get_server_printers,
+            commands::test_server_printer,
+            commands::unpair_with_server,
+            commands::check_connection,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
