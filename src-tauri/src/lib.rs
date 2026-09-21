@@ -12,7 +12,9 @@ pub mod commands;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tauri::Manager;
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::image::Image;
 use identity::AgentIdentity;
 use api::ApiClient;
 use websocket::WsManager;
@@ -73,6 +75,13 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // If another instance is running, focus existing window
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .setup(|app| {
             // Init database
             let app_data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
@@ -150,9 +159,63 @@ pub fn run() {
                 }
             }
 
-            // Setup system tray
-            let _tray = TrayIconBuilder::new()
-                .tooltip("Ordoo Agent")
+            // Setup system tray with icon and menu
+            let show_item = MenuItemBuilder::with_id("show", "إظهار النافذة").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "إنهاء").build(app)?;
+            let menu = MenuBuilder::new(app).item(&show_item).item(&quit_item).build()?;
+
+            // Try to load icon from the bundled resources
+            let app_handle = app.handle().clone();
+            let icon_path = app_handle.path().resource_dir()
+                .ok()
+                .and_then(|p| {
+                    let path = p.join("icons/icon.png");
+                    if path.exists() { Some(path) } else { None }
+                });
+
+            let icon_image = match icon_path {
+                Some(p) => {
+                    let img = image::open(&p).expect("Failed to load tray icon from path");
+                    let rgba = img.to_rgba8();
+                    let (w, h) = rgba.dimensions();
+                    Image::new_owned(rgba.into_raw(), w, h)
+                }
+                None => {
+                    let img = image::load_from_memory(include_bytes!("../icons/icon.png"))
+                        .expect("Failed to load tray icon from bytes");
+                    let rgba = img.to_rgba8();
+                    let (w, h) = rgba.dimensions();
+                    Image::new_owned(rgba.into_raw(), w, h)
+                }
+            };
+
+            let _tray = TrayIconBuilder::with_id("ordoo-agent-tray")
+                .tooltip("Ordoo Agent -(ordoo.shop)")
+                .icon(icon_image)
+                .menu(&menu)
+                .on_menu_event(move |app, event| {
+                    match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
                 .build(app)?;
 
             Ok(())
