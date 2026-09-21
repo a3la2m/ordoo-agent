@@ -181,6 +181,8 @@ pub fn run() {
             commands::test_server_printer,
             commands::unpair_with_server,
             commands::check_connection,
+            commands::check_for_updates,
+            commands::detect_usb_printers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -22,12 +22,19 @@ interface LocalPrinter {
   last_test_success: boolean | null;
 }
 
+interface UsbPrinter {
+  name: string;
+  connection_type: string;
+}
+
 export default function Printers() {
   const [serverPrinters, setServerPrinters] = useState<ServerPrinter[]>([]);
   const [localPrinters, setLocalPrinters] = useState<LocalPrinter[]>([]);
+  const [usbPrinters, setUsbPrinters] = useState<UsbPrinter[]>([]);
   const [testingId, setTestingId] = useState<number | null>(null);
   const [testResults, setTestResults] = useState<{ [key: number]: { success: boolean; message: string } }>({});
   const [loading, setLoading] = useState(true);
+  const [detectingUsb, setDetectingUsb] = useState(false);
 
   useEffect(() => {
     loadPrinters();
@@ -75,6 +82,19 @@ export default function Printers() {
       }));
     } finally {
       setTestingId(null);
+    }
+  }
+
+  async function detectUsbPrinters() {
+    setDetectingUsb(true);
+    try {
+      const printers = await invoke<UsbPrinter[]>("detect_usb_printers");
+      setUsbPrinters(printers);
+    } catch (e) {
+      console.error("Failed to detect USB printers:", e);
+      setUsbPrinters([]);
+    } finally {
+      setDetectingUsb(false);
     }
   }
 
@@ -159,6 +179,64 @@ export default function Printers() {
           ))}
         </div>
       )}
+
+      {/* USB Printers Detection */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <h2 style={{ fontSize: "0.85rem", fontWeight: 700, color: "#7a8d9e", margin: 0 }}>
+            <i className="fas fa-usb ml-1"></i> طابعات USB
+          </h2>
+          <button
+            onClick={detectUsbPrinters}
+            disabled={detectingUsb}
+            style={{
+              padding: "6px 14px", borderRadius: 8, border: "none",
+              background: detectingUsb ? "#e5e7eb" : "#2563eb",
+              color: detectingUsb ? "#9ca3af" : "white",
+              fontSize: "0.75rem", fontWeight: 600,
+              cursor: detectingUsb ? "not-allowed" : "pointer",
+            }}
+          >
+            {detectingUsb ? (
+              <><i className="fas fa-spinner fa-spin ml-1"></i> جاري الكشف...</>
+            ) : (
+              <><i className="fas fa-search ml-1"></i> كشف طابعات USB</>
+            )}
+          </button>
+        </div>
+
+        {usbPrinters.length > 0 ? (
+          usbPrinters.map((p, i) => (
+            <div key={i} style={{
+              background: "white", borderRadius: 12, padding: 16, marginBottom: 8,
+              border: "1px solid #f0f2f5", display: "flex", alignItems: "center", gap: 12,
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10,
+                background: "#dbeafe",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <i className="fas fa-usb" style={{ color: "#2563eb", fontSize: "0.9rem" }}></i>
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "0.85rem", color: "#1a2a38" }}>{p.name}</div>
+                <div style={{ fontSize: "0.75rem", color: "#7a8d9e", marginTop: 2 }}>USB</div>
+              </div>
+            </div>
+          ))
+        ) : (
+          !detectingUsb && (
+            <div style={{
+              background: "#f9fafb", borderRadius: 12, padding: 20, textAlign: "center",
+              border: "1px dashed #e5e7eb",
+            }}>
+              <div style={{ color: "#9ca3af", fontSize: "0.8rem" }}>
+                اضغط "كشف طابعات USB" للبحث عن الطابعات المتصلة
+              </div>
+            </div>
+          )
+        )}
+      </div>
 
       {/* No printers */}
       {serverPrinters.length === 0 && localPrinters.length === 0 && (

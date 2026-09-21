@@ -173,6 +173,14 @@ impl ApiClient {
         self.ping(token).await?;
         Ok(true)
     }
+
+    /// Check for app updates
+    pub async fn check_version(&self) -> Result<VersionCheck, String> {
+        let url = format!("{}/agent-version.json", self.server_url);
+        let resp = self.client.get(&url).send().await.map_err(|e| e.to_string())?;
+        let data = resp.json::<VersionCheck>().await.map_err(|e| e.to_string())?;
+        Ok(data)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,4 +199,11 @@ pub struct PrinterTestResult {
     pub connected: bool,
     pub response_time_ms: Option<u64>,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VersionCheck {
+    pub version: String,
+    pub download_url: Option<String>,
+    pub changelog: Option<String>,
 }

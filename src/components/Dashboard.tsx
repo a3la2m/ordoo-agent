@@ -15,11 +15,21 @@ interface DashboardData {
   last_job: any | null;
 }
 
+interface UpdateInfo {
+  has_update: boolean;
+  current_version: string;
+  latest_version: string;
+  download_url?: string;
+  changelog?: string;
+}
+
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
 
   useEffect(() => {
     loadData();
+    checkForUpdates();
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -30,6 +40,15 @@ export default function Dashboard() {
       setData(result);
     } catch (e) {
       console.error(e);
+    }
+  }
+
+  async function checkForUpdates() {
+    try {
+      const result = await invoke<UpdateInfo>("check_for_updates");
+      setUpdateInfo(result);
+    } catch (e) {
+      console.error("Failed to check for updates:", e);
     }
   }
 
@@ -47,6 +66,50 @@ export default function Dashboard() {
 
   return (
     <div style={{ maxWidth: 700, margin: "0 auto" }}>
+      {/* Update Banner */}
+      {updateInfo?.has_update && (
+        <div style={{
+          background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+          borderRadius: 12, padding: "14px 20px", marginBottom: 20,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: "rgba(255,255,255,0.2)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "1.2rem",
+            }}>
+              🆕
+            </div>
+            <div>
+              <div style={{ color: "white", fontWeight: 700, fontSize: "0.9rem" }}>
+                إصدار جديد متاح: v{updateInfo.latest_version}
+              </div>
+              {updateInfo.changelog && (
+                <div style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.75rem", marginTop: 2 }}>
+                  {updateInfo.changelog}
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              const url = updateInfo.download_url || "https://ordoo.shop/merchant/agent/download";
+              open(url).catch(() => window.open(url, "_blank"));
+            }}
+            style={{
+              padding: "8px 16px", borderRadius: 8, border: "none",
+              background: "white", color: "#2563eb",
+              fontSize: "0.8rem", fontWeight: 700, cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <i className="fas fa-download ml-1"></i> تحميل
+          </button>
+        </div>
+      )}
+
       {/* Connection Status */}
       <div style={{
         background: data.paired ? "linear-gradient(135deg, #16a34a, #22c55e)" : "linear-gradient(135deg, #d97706, #f59e0b)",

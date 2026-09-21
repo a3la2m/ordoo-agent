@@ -74,9 +74,8 @@ function App() {
           <img
             src="/ordoo-logo.png"
             alt="Ordoo"
-            style={{ width: 36, height: 36, borderRadius: 8 }}
+            style={{ width: 44, height: 44, borderRadius: 12 }}
             onError={(e) => {
-              // Fallback if logo not found
               (e.target as HTMLImageElement).style.display = "none";
             }}
           />

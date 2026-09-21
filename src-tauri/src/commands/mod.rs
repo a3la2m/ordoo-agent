@@ -387,3 +387,68 @@ pub async fn check_connection(
         })),
     }
 }
+
+// --- Update Check ---
+
+#[tauri::command]
+pub async fn check_for_updates(
+    state: State<'_, Arc<Mutex<crate::AppState>>>,
+) -> Result<serde_json::Value, String> {
+    let app = state.lock().await;
+    let current_version = &app.config.lock().await.version;
+
+    match app.api_client.check_version().await {
+        Ok(server) => {
+            let has_update = server.version != *current_version;
+            Ok(serde_json::json!({
+                "has_update": has_update,
+                "current_version": current_version,
+                "latest_version": server.version,
+                "download_url": server.download_url,
+                "changelog": server.changelog,
+            }))
+        }
+        Err(_) => Ok(serde_json::json!({
+            "has_update": false,
+            "current_version": current_version,
+            "latest_version": current_version,
+        }))
+    }
+}
+
+// --- USB Printer Detection ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsbPrinter {
+    pub name: String,
+    pub connection_type: String,
+}
+
+#[tauri::command]
+pub async fn detect_usb_printers() -> Result<Vec<UsbPrinter>, String> {
+    use std::process::Command;
+
+    let output = Command::new("lsusb")
+        .output()
+        .map_err(|e| format!("Failed to run lsusb: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut printers = Vec::new();
+
+    for line in stdout.lines() {
+        let lower = line.to_lowercase();
+        // Common printer vendor IDs
+        if lower.contains("printer") || lower.contains("epson") || lower.contains("hp")
+            || lower.contains("canon") || lower.contains("brother") || lower.contains("ricoh")
+            || lower.contains("sharp") || lower.contains("kyocera") || lower.contains("samsung")
+            || lower.contains("xerox") || lower.contains("oki") || lower.contains("citizen")
+            || lower.contains("star") || lower.contains("bixolon") {
+            printers.push(UsbPrinter {
+                name: line.trim().to_string(),
+                connection_type: "usb".to_string(),
+            });
+        }
+    }
+
+    Ok(printers)
+}
