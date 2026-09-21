@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 interface DashboardData {
   paired: boolean;
   store_name: string | null;
+  server_url: string;
   machine_name: string;
   agent_id: number | null;
   version: string;
@@ -31,33 +32,52 @@ export default function Dashboard() {
     }
   }
 
+  function openWebsite() {
+    window.open("https://ordoo.shop", "_blank");
+  }
+
   if (!data) return <div style={{ textAlign: "center", padding: 40, color: "#7a8d9e" }}>جاري التحميل...</div>;
 
   return (
     <div style={{ maxWidth: 700, margin: "0 auto" }}>
       {/* Connection Status */}
       <div style={{
-        background: data.paired ? "linear-gradient(135deg, #16a34a, #22c55e)" : "#fef3c7",
+        background: data.paired ? "linear-gradient(135deg, #16a34a, #22c55e)" : "linear-gradient(135deg, #d97706, #f59e0b)",
         borderRadius: 16, padding: "20px 24px", marginBottom: 20,
         display: "flex", alignItems: "center", gap: 16,
       }}>
         <div style={{
           width: 48, height: 48, borderRadius: "50%",
-          background: data.paired ? "rgba(255,255,255,0.2)" : "#fbbf24",
+          background: "rgba(255,255,255,0.2)",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: "1.5rem",
         }}>
           {data.paired ? "🟢" : "🟡"}
         </div>
         <div>
-          <div style={{ color: data.paired ? "white" : "#92400e", fontSize: "1.1rem", fontWeight: 800 }}>
+          <div style={{ color: "white", fontSize: "1.1rem", fontWeight: 800 }}>
             {data.paired ? "متصل" : "غير مربوط"}
           </div>
-          <div style={{ color: data.paired ? "rgba(255,255,255,0.8)" : "#b45309", fontSize: "0.8rem" }}>
-            WebSocket: {data.ws_status}
+          <div style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.8rem" }}>
+            {data.paired ? `WebSocket: ${data.ws_status}` : `غير متصل بـ ${data.server_url.replace('https://', '').replace('http://', '')}`}
           </div>
         </div>
       </div>
+
+      {/* Website Link */}
+      <button onClick={openWebsite} style={{
+        width: "100%", padding: "12px", marginBottom: 20,
+        background: "white", borderRadius: 12, border: "1px solid #e5e7eb",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        fontSize: "0.85rem", fontWeight: 600, color: "#2C3E50",
+        cursor: "pointer", transition: "all 0.15s",
+      }}
+      onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "#f9fafb"; }}
+      onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "white"; }}
+      >
+        <i className="fas fa-external-link-alt" style={{ fontSize: "0.8rem" }}></i>
+        فتح لوحة التحكم — ordoo.shop
+      </button>
 
       {/* Info Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
@@ -66,16 +86,16 @@ export default function Dashboard() {
           <div style={{ fontWeight: 700, color: "#1a2a38" }}>{data.store_name || "—"}</div>
         </div>
         <div style={{ background: "white", borderRadius: 12, padding: 16, border: "1px solid #f0f2f5" }}>
-          <div style={{ color: "#7a8d9e", fontSize: "0.75rem", marginBottom: 4 }}>الجهاز</div>
-          <div style={{ fontWeight: 700, color: "#1a2a38" }}>{data.machine_name || "—"}</div>
+          <div style={{ color: "#7a8d9e", fontSize: "0.75rem", marginBottom: 4 }}>السيرفر</div>
+          <div style={{ fontWeight: 700, color: "#1a2a38", fontSize: "0.8rem" }}>{data.server_url.replace('https://', '').replace('http://', '')}</div>
         </div>
         <div style={{ background: "white", borderRadius: 12, padding: 16, border: "1px solid #f0f2f5" }}>
           <div style={{ color: "#7a8d9e", fontSize: "0.75rem", marginBottom: 4 }}>Agent ID</div>
           <div style={{ fontWeight: 700, color: "#1a2a38" }}>{data.agent_id || "—"}</div>
         </div>
         <div style={{ background: "white", borderRadius: 12, padding: 16, border: "1px solid #f0f2f5" }}>
-          <div style={{ color: "#7a8d9e", fontSize: "0.75rem", marginBottom: 4 }}>Version</div>
-          <div style={{ fontWeight: 700, color: "#1a2a38" }}>{data.version}</div>
+          <div style={{ color: "#7a8d9e", fontSize: "0.75rem", marginBottom: 4 }}>الإصدار</div>
+          <div style={{ fontWeight: 700, color: "#1a2a38" }}>v{data.version}</div>
         </div>
       </div>
 

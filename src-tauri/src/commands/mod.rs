@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 pub struct DashboardData {
     pub paired: bool,
     pub store_name: Option<String>,
+    pub server_url: String,
     pub machine_name: String,
     pub agent_id: Option<i64>,
     pub version: String,
@@ -73,6 +74,7 @@ pub async fn get_dashboard(
     Ok(DashboardData {
         paired: config.paired,
         store_name: config.store_name.clone(),
+        server_url: config.server_url.clone(),
         machine_name: hostname::get().map(|h| h.to_string_lossy().to_string()).unwrap_or_default(),
         agent_id: config.agent_id,
         version: config.version.clone(),

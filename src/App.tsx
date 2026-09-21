@@ -32,10 +32,16 @@ function App() {
       setConfig(cfg);
       if (!cfg.paired) {
         setPage("pairing");
+      } else {
+        setPage("dashboard");
       }
     } catch (e) {
       console.error("Failed to load config:", e);
     }
+  }
+
+  function handlePaired() {
+    loadConfig(); // Reload config and navigate to dashboard
   }
 
   const navItems: { id: Page; label: string; icon: string; requiresPairing?: boolean }[] = [
@@ -57,9 +63,27 @@ function App() {
         flexDirection: "column",
         flexShrink: 0,
       }}>
-        <div style={{ padding: "20px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-          <h1 style={{ fontSize: "1.1rem", fontWeight: 800, margin: 0 }}>Ordoo Agent</h1>
-          <p style={{ fontSize: "0.7rem", color: "#7a9170", margin: "4px 0 0" }}>v{config?.version || "1.0.0"}</p>
+        {/* Logo */}
+        <div style={{
+          padding: "20px 16px",
+          borderBottom: "1px solid rgba(255,255,255,0.1)",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+        }}>
+          <img
+            src="/ordoo-logo.png"
+            alt="Ordoo"
+            style={{ width: 36, height: 36, borderRadius: 8 }}
+            onError={(e) => {
+              // Fallback if logo not found
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <div>
+            <h1 style={{ fontSize: "1rem", fontWeight: 800, margin: 0 }}>Ordoo Agent</h1>
+            <p style={{ fontSize: "0.65rem", color: "#7a9170", margin: "2px 0 0" }}>v{config?.version || "0.1.0"}</p>
+          </div>
         </div>
 
         <nav style={{ flex: 1, padding: "8px 0" }}>
@@ -92,14 +116,15 @@ function App() {
           })}
         </nav>
 
+        {/* Status Footer */}
         <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(255,255,255,0.1)", fontSize: "0.7rem", color: "#555" }}>
           {config?.paired ? (
             <div>
-              <div style={{ color: "#7A9170" }}>{config.store_name || "متصل"}</div>
-              <div style={{ color: "#555", marginTop: 2 }}>ID: {config.agent_id}</div>
+              <div style={{ color: "#7A9170", fontWeight: 600 }}>{config.store_name || "متصل"}</div>
+              <div style={{ color: "#666", marginTop: 2 }}>ID: {config.agent_id}</div>
             </div>
           ) : (
-            <div style={{ color: "#d97706" }}>غير مربوط</div>
+            <div style={{ color: "#d97706", fontWeight: 600 }}>غير مربوط</div>
           )}
         </div>
       </aside>
@@ -107,7 +132,7 @@ function App() {
       {/* Main Content */}
       <main style={{ flex: 1, overflow: "auto", padding: 24 }}>
         {page === "dashboard" && <Dashboard />}
-        {page === "pairing" && <Pairing onPaired={loadConfig} />}
+        {page === "pairing" && <Pairing onPaired={handlePaired} />}
         {page === "printers" && <Printers />}
         {page === "queue" && <Queue />}
         {page === "logs" && <Logs />}
