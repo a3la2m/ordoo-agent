@@ -181,6 +181,7 @@ pub struct ServerPrinterInfo {
     pub name: String,
     pub connection_type: String,
     pub ip_address: Option<String>,
+    pub port: Option<u16>,
     pub section_name: Option<String>,
 }
 

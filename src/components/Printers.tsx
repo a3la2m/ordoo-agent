@@ -6,6 +6,7 @@ interface ServerPrinter {
   name: string;
   connection_type: string;
   ip_address: string | null;
+  port: number | null;
   section_name: string | null;
 }
 
@@ -124,7 +125,8 @@ export default function Printers() {
                   <div style={{ fontWeight: 700, fontSize: "0.85rem", color: "#1a2a38" }}>{p.name}</div>
                   <div style={{ fontSize: "0.75rem", color: "#7a8d9e", marginTop: 2 }}>
                     {getConnectionLabel(p.connection_type)}
-                    {p.ip_address && ` · ${p.ip_address}`}
+                    {p.ip_address && ` · ${p.ip_address}:${p.port || 9100}`}
+                    {p.connection_type === 'usb' && !p.ip_address && ' · اتصال مباشر'}
                     {p.section_name && <span style={{ color: "#2563eb", marginRight: 8 }}>← {p.section_name}</span>}
                   </div>
                   {testResults[p.id] && (
