@@ -129,7 +129,7 @@ export default function Dashboard() {
             {data.paired ? "متصل" : "غير مربوط"}
           </div>
           <div style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.8rem" }}>
-            {data.paired ? `حالة الاتصال: ${data.ws_status === 'connected' ? 'متصل' : 'غير متصل'}` : `غير متصل بـ ${data.server_url.replace('https://', '').replace('http://', '')}`}
+            {data.paired ? `حالة الاتصال: ${data.ws_status}` : `غير متصل بـ ${data.server_url.replace('https://', '').replace('http://', '')}`}
           </div>
         </div>
       </div>
