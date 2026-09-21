@@ -136,15 +136,15 @@ pub fn run() {
 
             app.manage(state.clone());
 
-            // Auto-connect WebSocket if paired
+            // Auto-connect WebSocket if paired (use tauri async runtime, not tokio::spawn)
             if config.paired {
                 if let Some(token) = &config.agent_token {
                     if let Some(store_id) = config.store_id {
                         let state_clone = state.clone();
-                        let tokenClone = token.clone();
-                        tokio::spawn(async move {
+                        let token_clone = token.clone();
+                        tauri::async_runtime::spawn(async move {
                             let app = state_clone.lock().await;
-                            let _ = app.ws_manager.lock().await.connect(&tokenClone, store_id).await;
+                            let _ = app.ws_manager.lock().await.connect(&token_clone, store_id).await;
                         });
                     }
                 }
