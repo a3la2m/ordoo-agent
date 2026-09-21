@@ -306,11 +306,15 @@ pub async fn discover_printers(
 #[tauri::command]
 pub async fn get_server_printers(
     state: State<'_, Arc<Mutex<crate::AppState>>>,
-) -> Result<Vec<crate::api::ServerPrinterInfo>, String> {
+) -> Result<serde_json::Value, String> {
     let app = state.lock().await;
     let config = app.config.lock().await;
     let token = config.agent_token.as_deref().ok_or("Not paired")?;
-    app.api_client.fetch_printers(token).await
+    let printers = app.api_client.fetch_printers(token).await?;
+    Ok(serde_json::json!({
+        "success": true,
+        "printers": printers,
+    }))
 }
 
 #[tauri::command]
