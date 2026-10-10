@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Ordoo Agent",
-  "version": "0.1.0",
+  "version": "0.3.11",
   "identifier": "com.ordoo.agent",
   "build": {
     "frontendDist": "../dist",
@@ -21,6 +21,13 @@
     ],
     "security": {
       "csp": null
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["ordoo-agent"]
+      }
     }
   },
   "bundle": {

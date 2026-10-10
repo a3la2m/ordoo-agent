@@ -5,11 +5,13 @@ import { open } from "@tauri-apps/plugin-shell";
 interface DashboardData {
   paired: boolean;
   store_name: string | null;
+  station_name: string | null;
   server_url: string;
   machine_name: string;
   agent_id: number | null;
   version: string;
   ws_status: string;
+  connected: boolean;
   printers: any[];
   queue_stats: { pending: number; printing: number; completed: number; failed: number };
   last_job: any | null;
@@ -23,9 +25,19 @@ interface UpdateInfo {
   changelog?: string;
 }
 
-export default function Dashboard() {
+interface SessionConfig {
+  paired: boolean;
+  session_user: string | null;
+}
+
+export default function Dashboard({ config }: { config: SessionConfig | null }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginNotice, setLoginNotice] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -59,6 +71,34 @@ export default function Dashboard() {
       console.error("Failed to open website:", e);
       // Fallback
       window.open("https://ordoo.shop", "_blank");
+    }
+  }
+
+  // تسجيل الدخول من الوكيل: يعيد رابطًا لمرة واحدة يُفتح في متصفح هذا الجهاز
+  async function handleAgentLogin() {
+    if (!loginEmail.trim() || !loginPassword) {
+      setLoginError("أدخل البريد الإلكتروني وكلمة المرور");
+      return;
+    }
+    setLoginLoading(true);
+    setLoginError(null);
+    setLoginNotice(null);
+    try {
+      const res = await invoke<{ success: boolean; url?: string; user?: string | null }>("agent_login", {
+        email: loginEmail.trim(),
+        password: loginPassword,
+      });
+      if (res.url) {
+        await invoke("open_external", { url: res.url });
+        setLoginPassword("");
+        setLoginNotice(`تم فتح صفحة الدخول${res.user ? ` — ${res.user}` : ""} في متصفح هذا الجهاز`);
+      } else {
+        setLoginError("لم يُعِد السيرفر رابطًا");
+      }
+    } catch (e: any) {
+      setLoginError(String(e));
+    } finally {
+      setLoginLoading(false);
     }
   }
 
@@ -110,9 +150,70 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* تسجيل الدخول على هذا الجهاز — يظهر فقط ما دام الجهاز مربوطًا ولا جلسة نشطة */}
+      {config && config.paired && !config.session_user && (
+        <div style={{ background: "white", borderRadius: 16, padding: 20, border: "1px solid #f0f2f5", marginBottom: 20 }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: "0.9rem", fontWeight: 700 }}>
+            <i className="fas fa-sign-in-alt ml-2" style={{ color: "#2563eb" }}></i>
+            تسجيل الدخول على هذا الجهاز
+          </h3>
+          <p style={{ fontSize: "0.75rem", color: "#7a8d9e", margin: "0 0 12px" }}>
+            يفتح متصفح هذا الجهاز على لوحة التاجر مباشرة — الرابط صالح120 ثانية ولمرة واحدة
+          </p>
+
+          <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
+            <input
+              type="email" value={loginEmail}
+              onChange={e => setLoginEmail(e.target.value)}
+              placeholder="البريد الإلكتروني"
+              dir="ltr"
+              style={{
+                width: "100%", padding: "10px 14px", border: "2px solid #e5e7eb",
+                borderRadius: 10, fontSize: "0.85rem", outline: "none", boxSizing: "border-box",
+              }}
+            />
+            <input
+              type="password" value={loginPassword}
+              onChange={e => setLoginPassword(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleAgentLogin(); }}
+              placeholder="كلمة المرور"
+              dir="ltr"
+              style={{
+                width: "100%", padding: "10px 14px", border: "2px solid #e5e7eb",
+                borderRadius: 10, fontSize: "0.85rem", outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          {loginError && (
+            <div style={{ background: "#fef2f2", color: "#dc2626", padding: "8px 12px", borderRadius: 8, fontSize: "0.8rem", marginBottom: 10 }}>
+              {loginError}
+            </div>
+          )}
+          {loginNotice && (
+            <div style={{ background: "#f0f9ff", color: "#2563eb", padding: "8px 12px", borderRadius: 8, fontSize: "0.8rem", marginBottom: 10 }}>
+              {loginNotice}
+            </div>
+          )}
+
+          <button onClick={handleAgentLogin} disabled={loginLoading} style={{
+            width: "100%", padding: "10px",
+            background: loginLoading ? "#a0a8b0" : "#2563eb",
+            color: "white", borderRadius: 10, border: "none", fontWeight: 700,
+            cursor: loginLoading ? "not-allowed" : "pointer",
+          }}>
+            {loginLoading ? (
+              <><i className="fas fa-spinner fa-spin ml-2"></i> جاري الطلب...</>
+            ) : (
+              <><i className="fas fa-external-link-alt ml-2"></i> فتح صفحة الدخول في المتصفح</>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Connection Status */}
       <div style={{
-        background: data.paired ? "linear-gradient(135deg, #16a34a, #22c55e)" : "linear-gradient(135deg, #d97706, #f59e0b)",
+        background: data.connected ? "linear-gradient(135deg, #16a34a, #22c55e)" : "linear-gradient(135deg, #d97706, #f59e0b)",
         borderRadius: 16, padding: "20px 24px", marginBottom: 20,
         display: "flex", alignItems: "center", gap: 16,
       }}>
@@ -122,14 +223,16 @@ export default function Dashboard() {
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: "1.5rem",
         }}>
-          {data.paired ? "🟢" : "🟡"}
+          {data.connected ? "🟢" : "🟡"}
         </div>
         <div>
           <div style={{ color: "white", fontSize: "1.1rem", fontWeight: 800 }}>
-            {data.paired ? "متصل" : "غير مربوط"}
+            {data.connected ? "متصل" : (data.paired ? "غير متصل" : "غير مربوط")}
           </div>
           <div style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.8rem" }}>
-            {data.paired ? `حالة الاتصال: ${data.ws_status}` : `غير متصل بـ ${data.server_url.replace('https://', '').replace('http://', '')}`}
+            {data.paired
+              ? `حالة الاتصال: ${data.connected ? "متصل" : "غير متصل"}${data.connected ? "" : " — بانتظار السيرفر"}`
+              : `غير متصل بـ ${data.server_url.replace('https://', '').replace('http://', '')}`}
           </div>
         </div>
       </div>
@@ -160,8 +263,8 @@ export default function Dashboard() {
           <div style={{ fontWeight: 700, color: "#1a2a38", fontSize: "0.8rem" }}>{data.server_url.replace('https://', '').replace('http://', '')}</div>
         </div>
         <div style={{ background: "white", borderRadius: 12, padding: 16, border: "1px solid #f0f2f5" }}>
-          <div style={{ color: "#7a8d9e", fontSize: "0.75rem", marginBottom: 4 }}>Agent ID</div>
-          <div style={{ fontWeight: 700, color: "#1a2a38" }}>{data.agent_id || "—"}</div>
+          <div style={{ color: "#7a8d9e", fontSize: "0.75rem", marginBottom: 4 }}>المحطة</div>
+          <div style={{ fontWeight: 700, color: "#1a2a38" }}>{data.station_name || "—"}</div>
         </div>
         <div style={{ background: "white", borderRadius: 12, padding: 16, border: "1px solid #f0f2f5" }}>
           <div style={{ color: "#7a8d9e", fontSize: "0.75rem", marginBottom: 4 }}>الإصدار</div>

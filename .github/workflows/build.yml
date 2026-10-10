@@ -48,7 +48,8 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Ordoo Agent ${{ github.ref_name }}'
           releaseBody: 'Ordoo Agent Desktop Print Application'
-          releaseDraft: true
+          # منشور (لا مسودة) حتى تُنزَّل ملفاته بلا مصادقة من أي بيئة
+          releaseDraft: false
           prerelease: false
 
   build-linux:
@@ -94,5 +95,6 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Ordoo Agent ${{ github.ref_name }}'
           releaseBody: 'Ordoo Agent Desktop Print Application'
-          releaseDraft: true
+          # منشور (لا مسودة) حتى تُنزَّل ملفاته بلا مصادقة من أي بيئة
+          releaseDraft: false
           prerelease: false

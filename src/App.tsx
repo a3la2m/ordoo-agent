@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import Dashboard from "./components/Dashboard";
 import Pairing from "./components/Pairing";
 import Printers from "./components/Printers";
@@ -12,32 +13,81 @@ type Page = "dashboard" | "pairing" | "printers" | "queue" | "logs" | "settings"
 interface AgentConfig {
   paired: boolean;
   store_name: string | null;
+  station_name: string | null;
   machine_id: string;
   agent_id: number | null;
   version: string;
   server_url: string;
+  session_user: string | null;
 }
 
 function App() {
   const [page, setPage] = useState<Page>("dashboard");
   const [config, setConfig] = useState<AgentConfig | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadConfig();
+
+    // نتيجة الرابط العميق من الويب: ordoo-agent://pair?... أو ordoo-agent://login?...
+    const unLink = listen<{ success: boolean; message: string }>("agent://deep-link-result", (event) => {
+      showToast(event.payload.message);
+      loadConfig(); // ينقل تلقائيًا: مربوط → الرئيسية، غير مربوط → الربط
+    });
+
+    // تغيّر جلسة المستخدم (دخول من الويب/البطاقة، أو خروج من الويب) — بدون نقل الصفحة
+    const unSession = listen<{ message: string; user: string | null }>("agent://session-changed", (event) => {
+      showToast(event.payload.message);
+      loadConfig(false);
+    });
+
+    // حُذفت المحطة من السيرفر (توكن مرفوض 401) — فك ارتباط تلقائي ونقل لصفحة الربط
+    const unUnpair = listen<{ message: string }>("agent://unpaired", (event) => {
+      showToast(event.payload.message);
+      loadConfig(); // غير مربوط → صفحة الربط
+    });
+
+    // تحديث اسم المحطة/المتجر من النبض — يظهر فورًا في الشريط الجانبي
+    const unCfg = listen("agent://config-changed", () => loadConfig(false));
+
+    return () => {
+      unLink.then((f) => f());
+      unSession.then((f) => f());
+      unUnpair.then((f) => f());
+      unCfg.then((f) => f());
+    };
   }, []);
 
-  async function loadConfig() {
+  function showToast(message: string) {
+    setToastMsg(message);
+    setTimeout(() => setToastMsg(null), 8000);
+  }
+
+  async function loadConfig(navigate = true) {
     try {
       const cfg = await invoke<AgentConfig>("get_config");
       setConfig(cfg);
-      if (!cfg.paired) {
-        setPage("pairing");
-      } else {
-        setPage("dashboard");
+      if (navigate) {
+        if (!cfg.paired) {
+          setPage("pairing");
+        } else {
+          setPage("dashboard");
+        }
       }
     } catch (e) {
       console.error("Failed to load config:", e);
     }
+  }
+
+  // خروج من البرنامج → يُلغي جلسة الويب أيضًا ( عبر السيرفر)
+  async function handleSessionLogout() {
+    try {
+      const msg = await invoke<string>("agent_session_logout");
+      showToast(msg);
+    } catch (e) {
+      showToast(String(e));
+    }
+    loadConfig(false);
   }
 
   function handlePaired() {
@@ -54,6 +104,18 @@ function App() {
 
   return (
     <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "'Segoe UI', Tahoma, sans-serif", background: "#f0f2f5" }}>
+      {/* إشعار نتيجة الرابط العميق / تغيّر الجلسة */}
+      {toastMsg && (
+        <div style={{
+          position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)",
+          background: "#1a2a38", color: "white", padding: "10px 20px",
+          borderRadius: 12, fontSize: "0.85rem", fontWeight: 700, zIndex: 9999,
+          boxShadow: "0 6px 24px rgba(0,0,0,0.25)", maxWidth: "90%",
+        }}>
+          <i className="fas fa-link ml-2" style={{ color: "#7A9170" }}></i>
+          {toastMsg}
+        </div>
+      )}
       {/* Sidebar */}
       <aside style={{
         width: 220,
@@ -117,9 +179,32 @@ function App() {
 
         {/* Status Footer */}
         <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(255,255,255,0.1)", fontSize: "0.7rem", color: "#555" }}>
+          {config?.session_user && (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+              padding: "8px 10px", marginBottom: 8, borderRadius: 10,
+              background: "rgba(122,145,112,0.12)", border: "1px solid rgba(122,145,112,0.25)",
+            }}>
+              <span style={{ color: "#7A9170", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <i className="fas fa-user-check" style={{ marginLeft: 6 }}></i>
+                {config.session_user}
+              </span>
+              <button
+                onClick={handleSessionLogout}
+                title="تسجيل الخروج من البرنامج (يُخرجك من الويب أيضًا)"
+                style={{
+                  background: "rgba(217,119,6,0.15)", border: "none", color: "#d97706",
+                  borderRadius: 8, padding: "4px 9px", fontSize: "0.65rem", fontWeight: 700,
+                  cursor: "pointer", flexShrink: 0,
+                }}
+              >
+                خروج
+              </button>
+            </div>
+          )}
           {config?.paired ? (
             <div>
-              <div style={{ color: "#7A9170", fontWeight: 600 }}>{config.store_name || "متصل"}</div>
+              <div style={{ color: "#7A9170", fontWeight: 600 }}>{config.station_name || config.store_name || "متصل"}</div>
               <div style={{ color: "#666", marginTop: 2 }}>ID: {config.agent_id}</div>
             </div>
           ) : (
@@ -130,12 +215,12 @@ function App() {
 
       {/* Main Content */}
       <main style={{ flex: 1, overflow: "auto", padding: 24 }}>
-        {page === "dashboard" && <Dashboard />}
+        {page === "dashboard" && <Dashboard config={config} />}
         {page === "pairing" && <Pairing onPaired={handlePaired} />}
         {page === "printers" && <Printers />}
         {page === "queue" && <Queue />}
         {page === "logs" && <Logs />}
-        {page === "settings" && <Settings />}
+        {page === "settings" && <Settings onChanged={() => loadConfig(false)} />}
       </main>
     </div>
   );

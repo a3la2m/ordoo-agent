@@ -16,6 +16,7 @@ pub struct PairingResponse {
     pub agent_id: Option<i64>,
     pub store_id: Option<i64>,
     pub token: Option<String>,
+    pub station_name: Option<String>,
 }
 
 /// Pairing status

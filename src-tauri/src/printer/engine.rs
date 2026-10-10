@@ -12,6 +12,24 @@ pub struct PrintPayload {
     pub notes: Option<String>,
     pub channel: Option<String>,
     pub items: Vec<PrintItem>,
+
+    // إجماليات الفاتورة — توجد في وظيفة الفاتورة فقط (اختيارية في وظائف الأقسام)
+    #[serde(default)]
+    pub subtotal: Option<f64>,
+    #[serde(default)]
+    pub discount_total: Option<f64>,
+    #[serde(default)]
+    pub delivery_fee: Option<f64>,
+    #[serde(default)]
+    pub total: Option<f64>,
+    #[serde(default)]
+    pub paid_cash: Option<f64>,
+    #[serde(default)]
+    pub paid_card: Option<f64>,
+    #[serde(default)]
+    pub change: Option<f64>,
+    #[serde(default)]
+    pub payment_method: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,6 +108,49 @@ impl PrintEngine {
             // Item notes
             if let Some(ref notes) = item.notes {
                 Self::push_str(&mut buf, &format!("  Note: {}\n", notes));
+            }
+        }
+
+        // Totals block (يُطبع فقط عندما توجد الإجماليات — وظيفة الفاتورة)
+        if payload.subtotal.is_some()
+            || payload.total.is_some()
+            || payload.paid_cash.is_some()
+            || payload.paid_card.is_some()
+        {
+            buf.extend_from_slice(b"\x1B\x61\x00"); // Left align
+            if let Some(v) = payload.subtotal {
+                Self::push_str(&mut buf, &format!("Subtotal: {:.2}\n", v));
+            }
+            if let Some(v) = payload.discount_total {
+                if v != 0.0 {
+                    Self::push_str(&mut buf, &format!("Discount: -{:.2}\n", v));
+                }
+            }
+            if let Some(v) = payload.delivery_fee {
+                if v != 0.0 {
+                    Self::push_str(&mut buf, &format!("Delivery: {:.2}\n", v));
+                }
+            }
+            if let Some(t) = payload.total {
+                Self::push_str(&mut buf, &format!("TOTAL: {:.2}\n", t));
+            }
+            if let Some(v) = payload.paid_cash {
+                if v > 0.0 {
+                    Self::push_str(&mut buf, &format!("Cash: {:.2}\n", v));
+                }
+            }
+            if let Some(v) = payload.paid_card {
+                if v > 0.0 {
+                    Self::push_str(&mut buf, &format!("Card: {:.2}\n", v));
+                }
+            }
+            if let Some(v) = payload.change {
+                if v > 0.0 {
+                    Self::push_str(&mut buf, &format!("Change: {:.2}\n", v));
+                }
+            }
+            if let Some(ref m) = payload.payment_method {
+                Self::push_str(&mut buf, &format!("Method: {}\n", m));
             }
         }
 

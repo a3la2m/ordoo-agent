@@ -1,6 +1,6 @@
 [package]
 name = "ordoo-agent"
-version = "0.1.0"
+version = "0.3.11"
 description = "Ordoo Agent - Desktop Print Agent"
 authors = ["Ordoo"]
 license = "MIT"
@@ -21,7 +21,8 @@ tauri = { version = "2.11.3", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
-tauri-plugin-single-instance = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-deep-link = "2"
 
 # Serialization
 serde_json = "1.0"
@@ -45,6 +46,7 @@ futures-util = "0.3"
 tokio = { version = "1", features = ["full"] }
 
 # UUID
+url = "2"
 uuid = { version = "1", features = ["v4"] }
 
 # Machine Identity
